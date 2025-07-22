@@ -1,35 +1,62 @@
 const std = @import("std");
 
 pub fn main() !void {
-    const builder = Person.builder()
-        .set_name("John") ///// required, non-idempotent
-        .set_age(30) ////////// required, non-idempotent
-        .set_partner("Mary") // optional, non-idempotent
-        .set_dead(); ////////// optional, idempotent
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    const builder = Person.builder(gpa.allocator())
+        .set_name("John") ///// required, oneshot
+        .set_age(30) ////////// required, oneshot
+        .set_partner("Mary") // optional, oneshot
+        .add_friend("Gary") //  optional, cumulative
+        .add_friend("Mark") //
+        .set_dead(); ////////// optional, non-cumulative
 
     const person = builder.build();
+    defer person.deinit();
 
-    std.debug.print("   name: {s}\n", .{person.name});
-    std.debug.print("    age: {}\n", .{person.age});
-    std.debug.print("partner: {s}\n", .{person.partner orelse "none"});
-    std.debug.print("   dead: {}\n", .{person.is_dead});
+    person.display();
 }
 
 const Name = []const u8;
 
 const Person = struct {
+    const Self = @This();
+
     name: Name,
     age: u8,
     partner: ?Name,
+    friends: std.ArrayList(Name),
     is_dead: bool,
 
-    pub fn builder() PersonBuilder(false, false, false) {
+    pub fn builder(allocator: std.mem.Allocator) PersonBuilder(false, false, false) {
         return .{
             .name = undefined,
             .age = undefined,
             .partner = null,
+            .friends = std.ArrayList(Name).init(allocator),
             .is_dead = false,
         };
+    }
+
+    pub fn deinit(self: *const Self) void {
+        self.friends.deinit();
+    }
+
+    pub fn display(self: *const Self) void {
+        std.debug.print("   name: {s}\n", .{self.name});
+        std.debug.print("    age: {}\n", .{self.age});
+        std.debug.print("partner: {s}\n", .{self.partner orelse "none"});
+        std.debug.print("   dead: {}\n", .{self.is_dead});
+
+        std.debug.print("friends: ", .{});
+        for (self.friends.items, 0..) |friend, i| {
+            if (i > 0) {
+                std.debug.print(", ", .{});
+            }
+            std.debug.print("{s}", .{friend});
+        }
+        std.debug.print("\n", .{});
     }
 };
 
@@ -40,6 +67,7 @@ fn PersonBuilder(has_name: bool, has_age: bool, has_partner: bool) type {
         name: Name,
         age: u8,
         partner: ?Name,
+        friends: std.ArrayList(Name),
         is_dead: bool,
 
         pub fn build(self: *const Self) Person {
@@ -53,6 +81,7 @@ fn PersonBuilder(has_name: bool, has_age: bool, has_partner: bool) type {
                 .name = self.name,
                 .age = self.age,
                 .partner = self.partner,
+                .friends = self.friends,
                 .is_dead = self.is_dead,
             };
         }
@@ -65,6 +94,7 @@ fn PersonBuilder(has_name: bool, has_age: bool, has_partner: bool) type {
                 .name = name,
                 .age = self.age,
                 .partner = self.partner,
+                .friends = self.friends,
                 .is_dead = self.is_dead,
             };
         }
@@ -77,6 +107,7 @@ fn PersonBuilder(has_name: bool, has_age: bool, has_partner: bool) type {
                 .name = self.name,
                 .age = age,
                 .partner = self.partner,
+                .friends = self.friends,
                 .is_dead = self.is_dead,
             };
         }
@@ -89,6 +120,7 @@ fn PersonBuilder(has_name: bool, has_age: bool, has_partner: bool) type {
                 .name = self.name,
                 .age = self.age,
                 .partner = partner,
+                .friends = self.friends,
                 .is_dead = self.is_dead,
             };
         }
@@ -98,7 +130,20 @@ fn PersonBuilder(has_name: bool, has_age: bool, has_partner: bool) type {
                 .name = self.name,
                 .age = self.age,
                 .partner = self.partner,
+                .friends = self.friends,
                 .is_dead = true,
+            };
+        }
+
+        pub fn add_friend(self: *const Self, friend: Name) PersonBuilder(has_name, has_age, has_partner) {
+            var friends = self.friends;
+            friends.append(friend) catch @panic("alloc failed");
+            return .{
+                .name = self.name,
+                .age = self.age,
+                .partner = self.partner,
+                .friends = friends,
+                .is_dead = self.is_dead,
             };
         }
     };

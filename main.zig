@@ -25,8 +25,8 @@ const Person = struct {
 
     pub fn builder() PersonBuilder(false, false, false) {
         return .{
-            .name = null,
-            .age = null,
+            .name = undefined,
+            .age = undefined,
             .partner = null,
             .is_dead = false,
         };
@@ -37,8 +37,8 @@ fn PersonBuilder(has_name: bool, has_age: bool, has_partner: bool) type {
     return struct {
         const Self = @This();
 
-        name: ?Name,
-        age: ?u8,
+        name: Name,
+        age: u8,
         partner: ?Name,
         is_dead: bool,
 
@@ -50,8 +50,8 @@ fn PersonBuilder(has_name: bool, has_age: bool, has_partner: bool) type {
                 @compileError("missing value for `age`");
             }
             return .{
-                .name = self.name orelse unreachable,
-                .age = self.age orelse unreachable,
+                .name = self.name,
+                .age = self.age,
                 .partner = self.partner,
                 .is_dead = self.is_dead,
             };
